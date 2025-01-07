@@ -2,8 +2,11 @@ package main
 
 import (
 	// "encoding/base64"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,6 +54,15 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type Header", err)
 		return
 	}
+	mediatype, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't parse content type", err)
+		return
+	}
+	if mediatype != "image/jpeg" && mediatype != "image/png" {
+		respondWithError(w, http.StatusUnsupportedMediaType, "Media is not JPEG image", fmt.Errorf("Can't upload media type: %s", mediatype))
+		return
+	}
 
 	// TODO: check if this is supposed to be io.ReadAll(formFile) or formFile.Read()...
 	image, err := io.ReadAll(formFile)
@@ -77,7 +89,14 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	videoThumbnails[videoID] = tb
 
 	extension := strings.Split(contentType, "/")[1]
-	fileName := fmt.Sprintf("%s.%s", videoID.String(), extension)
+	randSlice := make([]byte, 32)
+	_, err = rand.Read(randSlice)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate random filename", err)
+		return
+	}
+	randName := base64.RawURLEncoding.EncodeToString(randSlice)
+	fileName := fmt.Sprintf("%s.%s", randName, extension)
 	filePath := filepath.Join(cfg.assetsRoot, fileName)
 	fmt.Printf("file path is is: %+v\n", filePath)
 	newFile, err := os.Create(filePath)
@@ -97,7 +116,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	tbURL := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoID, extension)
+	tbURL := fmt.Sprintf("http://localhost:%s/%s", cfg.port, filePath)
 	fmt.Printf("url path is is: %+v\n", tbURL)
 	video.ThumbnailURL = &tbURL
 
