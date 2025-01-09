@@ -49,6 +49,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "Couldn't extract form data", err)
 		return
 	}
+	defer formFile.Close()
 	contentType := formFileHeader.Header.Get("Content-Type")
 	if contentType == "" {
 		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type Header", err)
