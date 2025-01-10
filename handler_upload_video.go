@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"context"
+	// "context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -13,11 +13,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
+	// "time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
+	// "github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -139,8 +139,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusFailedDependency, "Couldn't upload file to s3", err)
 		return
 	}
-	// vdURL := fmt.Sprintf("http://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileName)
-	vdURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileName)
+	vdURL := fmt.Sprintf("%s/%s", cfg.s3CfDistribution, fileName)
 	fmt.Printf("url path is is: %+v\n", vdURL)
 	video.VideoURL = &vdURL
 
@@ -150,14 +149,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	signedVideo, err := cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't generate signed URL for video.", err)
-		return
-	}
-
-	fmt.Printf("final url path is is: %s\n", *signedVideo.VideoURL)
-	respondWithJSON(w, http.StatusOK, signedVideo)
+	respondWithJSON(w, http.StatusOK, video)
 }
 
 type Probe struct {
@@ -261,32 +253,4 @@ func processVideoForFastStart(filePath string) (string, error) {
 		return "", err
 	}
 	return processPath, nil
-}
-
-func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
-	client := s3.NewPresignClient(s3Client)
-	req, err := client.PresignGetObject(context.Background(), &s3.GetObjectInput{Bucket: &bucket, Key: &key}, s3.WithPresignExpires(expireTime))
-	if err != nil {
-		return "", err
-	}
-	return req.URL, nil
-}
-
-func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
-	if video.VideoURL == nil {
-		return video, nil
-	}
-	fmt.Printf("altering URL: %s\n", *video.VideoURL)
-	oldURL := strings.Split(*video.VideoURL, ",")
-	if len(oldURL) != 2 {
-		return video, fmt.Errorf("incorrect filename, expected 2 parts; got %d", len(oldURL))
-	}
-	newURL, err := generatePresignedURL(cfg.s3Client, oldURL[0], oldURL[1], 1*time.Hour)
-	fmt.Printf("new URL: %s\n", newURL)
-	if err != nil {
-		return video, err
-	}
-	video.VideoURL = &newURL
-	fmt.Printf("altered URL: %s\n", *video.VideoURL)
-	return video, nil
 }
